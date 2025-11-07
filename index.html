@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WS ダメージ詳細シミュレーター</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    body { background:#f8f9fa; }
+    .number-input { max-width: 140px; }
+    .mono { font-variant-numeric: tabular-nums; }
+    .smallcode { font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace; font-size: .85rem; }
+    .scroll-y { max-height: 280px; overflow: auto; }
+    .is-invalid + .form-text, .is-invalid ~ .form-text { color:#dc3545; }
+
+    /* スマホ最適化 */
+    @media (max-width: 576px){
+      table.table th, table.table td { font-size: 0.8rem; padding: .25rem; }
+      select.form-select-sm, input.form-control-sm { font-size: 0.8rem; min-width: 60px; }
+      /* 列幅（スマホ）: 種別45 / 値35 / 削除20 */
+      .col-kind { width: 45% !important; }
+      .col-value { width: 35% !important; }
+      .col-del { width: 20% !important; }
+    }
+    /* デスクトップ列幅 */
+    .col-kind { width: 60%; }
+    .col-value { width: 30%; }
+    .col-del { width: 10%; }
+  </style>
+</head>
+<body class="pb-5">
+  <div class="container py-4">
+    <h1 class="h3 mb-3">WS ダメージ詳細シミュレーター</h1>
+    <p class="text-muted small mb-4">
+      ・アタックは「トリガーチェック → ソウル加算」 / 効果ダメは加算なし。<br>
+      ・ダメージチェックは1点ずつ表向き。クライマックスで即キャンセル、公開札は控室へ。<br>
+      ・ノーキャンセルなら公開した枚数がそのままクロックへ。7枚でレベルアップ（7枚は控室へ）。<br>
+      ・山札切れは控室でリフレッシュ → 直後に<strong>リフレペナで+1クロック</strong>（レベルアップ判定あり）。
+    </p>
+
+    <div class="row g-3">
+
+      <!-- 攻撃側（自分） -->
+      <div class="col-lg-6">
+        <div class="card shadow-sm">
+          <div class="card-header fw-bold">自分（攻撃側）</div>
+          <div class="card-body">
+            <div class="row g-2 align-items-end">
+              <div class="col-6 col-md-4">
+                <label class="form-label">山札 枚数</label>
+                <input id="myDeckTotal" type="number" class="form-control number-input" value="30" min="0">
+                <div class="form-text mono">初期: 30</div>
+              </div>
+              <div class="col-6 col-md-8">
+                <label class="form-label">山札トリガー内訳（0は自動計算）</label>
+                <div class="d-flex flex-wrap gap-2">
+                  <div class="input-group input-group-sm" style="max-width:160px">
+                    <span class="input-group-text">1</span>
+                    <input id="myTrig1" type="number" class="form-control" value="8" min="0">
+                  </div>
+                  <div class="input-group input-group-sm" style="max-width:160px">
+                    <span class="input-group-text">2</span>
+                    <input id="myTrig2" type="number" class="form-control" value="0" min="0">
+                  </div>
+                  <div class="input-group input-group-sm" style="max-width:160px">
+                    <span class="input-group-text">0</span>
+                    <input id="myTrig0" type="number" class="form-control" value="16" min="0" readonly>
+                  </div>
+                </div>
+                <div class="form-text mono">合計 <span id="myTrigSum">30</span> / 山札 <span id="myDeckTotalEcho">30</span></div>
+              </div>
+            </div>
+
+            <div class="row g-2 mt-2">
+              <div class="col-6 col-md-4">
+                <label class="form-label">控室 枚数</label>
+                <input id="myWrTotal" type="number" class="form-control number-input" value="0" min="0">
+              </div>
+              <div class="col-6 col-md-8">
+                <label class="form-label">控室トリガー内訳（0は自動計算）</label>
+                <div class="d-flex flex-wrap gap-2">
+                  <div class="input-group input-group-sm" style="max-width:160px">
+                    <span class="input-group-text">1</span>
+                    <input id="myWrTrig1" type="number" class="form-control" value="0" min="0">
+                  </div>
+                  <div class="input-group input-group-sm" style="max-width:160px">
+                    <span class="input-group-text">2</span>
+                    <input id="myWrTrig2" type="number" class="form-control" value="0" min="0">
+                  </div>
+                  <div class="input-group input-group-sm" style="max-width:160px">
+                    <span class="input-group-text">0</span>
+                    <input id="myWrTrig0" type="number" class="form-control" value="0" min="0" readonly>
+                  </div>
+                </div>
+                <div class="form-text mono">合計 <span id="myWrTrigSum">0</span> / 控室 <span id="myWrTotalEcho">0</span></div>
+              </div>
+            </div>
+
+            <hr>
+
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="fw-semibold">攻撃の設定</div>
+              <div class="small text-muted">メモ欄なし / スマホ最適化</div>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-2">
+                <thead class="table-light">
+                  <tr>
+                    <th class="text-nowrap col-kind">種別</th>
+                    <th class="text-nowrap col-value">値</th>
+                    <th class="text-nowrap col-del"></th>
+                  </tr>
+                </thead>
+                <tbody id="attackRows"></tbody>
+              </table>
+            </div>
+            <button id="addRow" class="btn btn-outline-secondary btn-sm">行を追加</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 防御側（相手） -->
+      <div class="col-lg-6">
+        <div class="card shadow-sm">
+          <div class="card-header fw-bold">相手（防御側）</div>
+          <div class="card-body">
+            <div class="row g-2">
+              <div class="col-6 col-md-4">
+                <label class="form-label">山札 枚数</label>
+                <input id="oppDeckTotal" type="number" class="form-control number-input" value="5" min="0">
+                <div class="form-text mono">その他: <span id="oppDeckOthers">3</span> / 合計: <span id="oppDeckSum">5</span></div>
+              </div>
+              <div class="col-6 col-md-4">
+                <label class="form-label">山札 クライマックス</label>
+                <input id="oppDeckCX" type="number" class="form-control number-input" value="2" min="0">
+              </div>
+              <div class="col-6 col-md-4">
+                <label class="form-label">控室 枚数</label>
+                <input id="oppWrTotal" type="number" class="form-control number-input" value="20" min="0">
+                <div class="form-text mono">その他: <span id="oppWrOthers">14</span> / 合計: <span id="oppWrSum">20</span></div>
+              </div>
+              <div class="col-6 col-md-4">
+                <label class="form-label">控室 クライマックス</label>
+                <input id="oppWrCX" type="number" class="form-control number-input" value="6" min="0">
+              </div>
+              <div class="col-6 col-md-4">
+                <label class="form-label">開始レベル</label>
+                <input id="oppLevel" type="number" class="form-control number-input" value="2" min="0">
+              </div>
+              <div class="col-6 col-md-4">
+                <label class="form-label">開始クロック</label>
+                <input id="oppClock" type="number" class="form-control number-input" value="5" min="0">
+              </div>
+            </div>
+            <div class="form-text small">
+              ※クライマックスは<strong>ダメージキャンセル判定</strong>にのみ使用。その他=非クライマックス。
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 実行 -->
+    <div class="mt-4 d-flex gap-2">
+      <button id="runOnce" class="btn btn-primary">1回シミュレーション</button>
+      <button id="runMany" class="btn btn-outline-primary">5000回シミュレーション</button>
+      <button id="exportCSV" class="btn btn-outline-success">詳細CSVダウンロード</button>
+      <button id="reset" class="btn btn-outline-secondary">入力を初期化</button>
+    </div>
+
+    <!-- 結果 -->
+    <div class="row mt-4 g-3">
+      <div class="col-lg-6">
+        <div class="card shadow-sm">
+          <div class="card-header fw-bold">直近の結果（1回分）</div>
+          <div class="card-body smallcode">
+            <div id="lastResult" class="mono"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card shadow-sm">
+          <div class="card-header fw-bold">統計（複数回）</div>
+          <div class="card-body">
+            <ul class="mb-2 mono">
+              <li>試行回数: <span id="statTrials">0</span></li>
+              <li>平均総ダメージ: <span id="statAvgDmg">-</span></li>
+              <li>キャンセル率（攻撃全体）: <span id="statCancelRate">-</span></li>
+              <li>平均レベルアップ回数: <span id="statAvgLvlUp">-</span></li>
+              <li>平均リフレペナ回数: <span id="statAvgRefresh">-</span></li>
+            </ul>
+            <div class="row g-2">
+              <div class="col-12">
+                <div class="fw-semibold mt-2">総ダメージ分布（1試行合計）</div>
+                <div id="totalDist" class="smallcode scroll-y border rounded p-2 bg-light"></div>
+              </div>
+              <div class="col-12">
+                <div class="fw-semibold">「N点でキャンセル」分布（攻撃ごと）</div>
+                <div id="cancelDist" class="smallcode scroll-y border rounded p-2 bg-light"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /container -->
+
+  <script src="main.js"></script>
+</body>
+</html>
